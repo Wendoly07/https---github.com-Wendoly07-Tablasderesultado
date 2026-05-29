@@ -1,209 +1,213 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
-
+// Establecer la zona horaria a Managua
 date_default_timezone_set('America/Managua');
 
-// ─── Conexión con PDO ──────────────────────────────────────────────────────
+// Configuración de Azure SQL Server
+$azureSqlConfig = [
+    'server' => getenv('AZURE_SQL_SERVER') ?: 'tcp:srvdbcacdev.database.windows.net,1433',
+    'database' => getenv('AZURE_SQL_DATABASE') ?: 'dblotocacdev',
+    'uid' => getenv('AZURE_SQL_USER') ?: 'LotoAdmin@srvdbcacdev',
+    'pwd' => getenv('AZURE_SQL_PASSWORD') ?: 'LotAdmin1.',
+    'Encrypt' => true,
+    'TrustServerCertificate' => false,
+    'CharacterSet' => 'UTF-8'
+];
+
 function getSqlConnection() {
-    try {
-        $conn = new PDO(
-            "sqlsrv:Server=" . getenv('DB_SERVER') . ";Database=" . getenv('DB_NAME'),
-            getenv('DB_USER'),
-            getenv('DB_PASSWORD'),
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        return $conn;
-    } catch (PDOException $e) {
-        throw new Exception('Error al conectar: ' . $e->getMessage());
-    }
-}
+    global $azureSqlConfig;
 
-// ─── Parsear resultados según el juego ────────────────────────────────────
-function parseResult($gameName, $result) {
-    $resultRaw = is_array($result) ? implode('-', $result) : $result;
-    $pars = [null, null, null, null, null, null, null];
-
-    if ($gameName === 'Diaria +1') {
-        preg_match('/^(\d+)/', trim($result), $m1);
-        preg_match('/\"?\+1\"?\s*:\s*(\d+)/', $result, $m2);
-        $pars[0] = isset($m1[1]) ? $m1[1] : null;
-        $pars[1] = isset($m2[1]) ? $m2[1] : null;
-
-    } elseif ($gameName === 'Jugá Tres') {
-        $str = is_array($result) ? $result[0] : $result;
-        $digits = str_split($str);
-        foreach ($digits as $i => $d) {
-            if ($i < 7) $pars[$i] = $d;
-        }
-
-    } else {
-        if (is_array($result)) {
-            foreach ($result as $i => $val) {
-                if ($i < 7) $pars[$i] = trim($val);
-            }
-        } else {
-            $pars[0] = trim($result);
-        }
-    }
-
-    return [$resultRaw, $pars];
-}
-
-// ─── Obtener sorteos de la API ─────────────────────────────────────────────
-function getAllDraws() {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => 'https://gamesdata.loto.hn',
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json']
-    ]);
-    $raw = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
-
-    if ($raw === false) throw new Exception('cURL error: ' . $err);
-
-    $data = json_decode($raw, true);
-    if ($data === null) throw new Exception('JSON inválido de la API');
-
-    $draws    = [];
-    $daysOrder = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-    $dayNames  = [
-        'Monday'    => 'Lunes',
-        'Tuesday'   => 'Martes',
-        'Wednesday' => 'Miércoles',
-        'Thursday'  => 'Jueves',
-        'Friday'    => 'Viernes',
-        'Saturday'  => 'Sábado',
-        'Sunday'    => 'Domingo'
+    $connectionInfo = [
+        'Database' => $azureSqlConfig['database'],
+        'Uid' => $azureSqlConfig['uid'],
+        'PWD' => $azureSqlConfig['pwd'],
+        'Encrypt' => $azureSqlConfig['Encrypt'],
+        'TrustServerCertificate' => $azureSqlConfig['TrustServerCertificate'],
+        'CharacterSet' => $azureSqlConfig['CharacterSet']
     ];
 
-    foreach ($data as $gameName => $sections) {
-        if (!isset($sections['Whole week']['draws'])) continue;
-
-        $weekDraws = $sections['Whole week']['draws'];
-
-        foreach ($daysOrder as $day) {
-            if (!isset($weekDraws[$day]) || !is_array($weekDraws[$day]) || empty($weekDraws[$day])) continue;
-
-            foreach ($weekDraws[$day] as $time => $drawData) {
-                if (!isset($drawData['drawnumber'], $drawData['result'])) continue;
-                if ($drawData['result'] === null) continue;
-
-                [$resultRaw, $pars] = parseResult($gameName, $drawData['result']);
-
-                $timestampSec = intval($drawData['date'] / 1000);
-
-                $draws[] = [
-                    'pais'           => 'HN',
-                    'game_name'      => $gameName,
-                    'draw_number'    => strval($drawData['drawnumber']),
-                    'draw_date'      => date('Y-m-d H:i:s', $timestampSec),
-                    'result_raw'     => $resultRaw,
-                    'jackpot'        => isset($drawData['jackpot']) ? floatval($drawData['jackpot']) : null,
-                    'day_of_week'    => $dayNames[$day] ?? $day,
-                    'draw_time'      => date('H:i:s', $timestampSec),
-                    'source_section' => 'Whole week',
-                    'par1'           => $pars[0],
-                    'par2'           => $pars[1],
-                    'par3'           => $pars[2],
-                    'par4'           => $pars[3],
-                    'par5'           => $pars[4],
-                    'par6'           => $pars[5],
-                    'par7'           => $pars[6],
-                ];
-            }
-        }
+    $conn = sqlsrv_connect($azureSqlConfig['server'], $connectionInfo);
+    if ($conn === false) {
+        throw new Exception('Error al conectar a Azure SQL: ' . print_r(sqlsrv_errors(), true));
     }
 
-    return $draws;
+    return $conn;
 }
 
-// ─── Insertar si no existe ─────────────────────────────────────────────────
-function insertDraw($conn, $draw) {
-    // Verificar duplicado
-    $stmt = $conn->prepare("
-        SELECT COUNT(*) 
-        FROM numeros_ganadores_sorteos_prod_prueba 
-        WHERE game_name = ? AND draw_number = ?
-    ");
-    $stmt->execute([$draw['game_name'], $draw['draw_number']]);
-
-    if ($stmt->fetchColumn() > 0) return false;
-
-    // Insertar
-    $stmt = $conn->prepare("
-        INSERT INTO numeros_ganadores_sorteos_prod_prueba 
-            (pais, game_name, draw_number, draw_date, result_raw, jackpot,
-             day_of_week, draw_time, source_section,
-             par1, par2, par3, par4, par5, par6, par7)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-
-    $stmt->execute([
-        $draw['pais'],
-        $draw['game_name'],
-        $draw['draw_number'],
-        $draw['draw_date'],
-        $draw['result_raw'],
-        $draw['jackpot'],
-        $draw['day_of_week'],
-        $draw['draw_time'],
-        $draw['source_section'],
-        $draw['par1'],
-        $draw['par2'],
-        $draw['par3'],
-        $draw['par4'],
-        $draw['par5'],
-        $draw['par6'],
-        $draw['par7'],
-    ]);
-
-    return true;
-}
-
-// ─── Main ──────────────────────────────────────────────────────────────────
+// Obtener la hora actual
 $hora_actual = date('H:i');
+
+// Definir las horas límite (en formato 24 horas)
 $hora_inicio = '11:00';
-$hora_fin    = '23:00';
+$hora_fin = '23:00';
 
-if ($hora_actual >= $hora_inicio && $hora_actual <= $hora_fin) {
-    $conn = null;
+// Convertir las horas a formato strtotime para comparar
+$inicio = strtotime($hora_inicio);
+$fin = strtotime($hora_fin);
+$actual = strtotime($hora_actual);
+
+function getLastResults(){
+    $games = [
+        "Diaria +1"=>[
+            "id"=>1,
+            "results"=>[0,0],
+            "Game"=>0
+          ],
+        "Jugá Tres"=>[
+            "id"=>13,
+            "results"=>[0,0,0],
+            "Game"=>0
+          ],
+        "Premia2"=>[
+            "id"=>4,
+            "results"=>[0,0],
+            "Game"=>0
+          ],
+          "Super Premio"=>[
+            "id"=>2,
+            "results"=>[0,0,0,0,0,0],
+            "Game"=>0
+          ],
+          "Multi-X-LD"=>[
+            "id"=>12,
+            "results"=>[0,0],
+            "Game"=>0
+          ],
+          "Pega3"=>[
+            "id"=>3,
+            "results"=>[0,0,0],
+            "Game"=>0
+          ],
+          "Bingo Con Todo"=>[
+            "id"=>15,
+            "results"=>[0,0,0,0,0,0,0],
+            "Game"=>0
+          ]
+    ];
+    $data="fail";
+    $resp = "true";
     try {
-        $draws    = getAllDraws();
-        $conn     = getSqlConnection();
-        $inserted = 0;
-        $skipped  = 0;
+        //URL, Where the JSON data is going to be sent
+        // sending post request to reqres.in
+        $url = "https://gamesdata.loto.hn";
+        //initialize CURL
+        $ch = curl_init();
+        //options for curl
+        $array_options = array(
+            //set the url option
+            CURLOPT_URL=>$url,
+            //instead of outputting it 
+            CURLOPT_RETURNTRANSFER=>true,
+            //Using the CURLOPT_HTTPHEADER set the Content-Type to application/json
+            CURLOPT_HTTPHEADER=>array('Content-Type:application/json')
+        );
+        //setting multiple options using curl_setopt_array
+        curl_setopt_array($ch,$array_options);
+        // using curl_exec() is used to execute the POST request
+        $prev = curl_exec($ch);
+        $resp = json_decode($prev,true);
+        foreach ($games as $key => $value) {
+            if($key=="Jugá Tres"){
+                $games[$key]["results"] = str_split($resp[$key]["Last two draws"]["draws"]["Last Draw"]["result"][0]);
+            }elseif($key=="Diaria +1"){
+                $string = $resp[$key]["Last two draws"]["draws"]["Last Draw"]["result"];
+                // Encuentra la posición del primer número
+                $firstNumber = substr($string, 0, 2);
+                $Slength = strlen($string);
+                $lastNumber = substr($string, $Slength -2 , $Slength-1);
+                // Crea el arreglo con los valores extraídos
+                $result = array(intval($firstNumber), intval($lastNumber));
 
-        foreach ($draws as $draw) {
-            if (insertDraw($conn, $draw)) {
-                $inserted++;
-            } else {
-                $skipped++;
+                $games[$key]["results"] =  $result;
+
             }
+            else{
+                $games[$key]["results"] = $resp[$key]["Last two draws"]["draws"]["Last Draw"]["result"];
+            }
+            $games[$key]["Game"] = $resp[$key]["Last two draws"]["draws"]["Last Draw"]["drawnumber"];
         }
-
-        echo json_encode([
-            'status'   => 'success',
-            'inserted' => $inserted,
-            'skipped'  => $skipped,
-            'total'    => count($draws)
-        ]);
-
+        //close the cURL and load the page
+        curl_close($ch);
+        $resp = "success";
     } catch (Exception $e) {
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
-    } finally {
-        $conn = null; // PDO se cierra asignando null
+        echo 'Excepción capturada: ',  $e->getMessage(), "\n";
+        $resp = "error";
+    }
+    
+
+    return [$resp, $games];
+}
+
+function insertResults($juegoID,$json_obj,$numeroNuevoSorteo){
+    $conn = getSqlConnection();
+
+    $sqlMax = "SELECT MAX(sorteo) AS numSorteo FROM loto_sorteos_HN WHERE juego = ?";
+    $params = [$juegoID];
+    $stmt = sqlsrv_query($conn, $sqlMax, $params);
+
+    if ($stmt === false) {
+        throw new Exception('Error en consulta SELECT: ' . print_r(sqlsrv_errors(), true));
     }
 
-} else {
-    echo json_encode([
-        'status'  => 'skipped',
-        'message' => 'Fuera del horario permitido (11:00 - 23:00)',
-        'hora'    => $hora_actual
-    ]);
+    $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+    sqlsrv_free_stmt($stmt);
+    $ultimoNumeroSorteo = isset($row['numSorteo']) ? intval($row['numSorteo']) : 0;
+
+    $parValues = [];
+    for ($i = 0; $i < 7; $i++) {
+        $parValues[] = isset($json_obj[$i]) ? trim($json_obj[$i]) : null;
+    }
+
+    if ($ultimoNumeroSorteo < $numeroNuevoSorteo) {
+        $fechaInt = intval(date('Ymd'));
+        $fecha = date('Y-m-d H:i:s');
+        $hora = date('H:00:00');
+
+        $sql = "INSERT INTO loto_sorteos_HN (juego, fechaInt, fecha, hora, sorteo, par1, par2, par3, par4, par5, par6, par7)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        $params = array_merge([$juegoID, $fechaInt, $fecha, $hora, $numeroNuevoSorteo], $parValues);
+        $stmt = sqlsrv_query($conn, $sql, $params);
+
+        if ($stmt === false) {
+            throw new Exception('Error en INSERT: ' . print_r(sqlsrv_errors(), true));
+        }
+
+        sqlsrv_free_stmt($stmt);
+
+        if (function_exists('w3tc_pgcache_flush_post')) {
+            w3tc_pgcache_flush_post(441);
+        }
+    } else {
+        echo "no requerida\n";
+        sqlsrv_close($conn);
+        return;
+    }
+
+    sqlsrv_close($conn);
+    echo "$juegoID";
 }
+
+
+// Verificar si la hora actual está entre las horas límite
+if ($actual >= $inicio && $actual <= $fin) {
+    try {
+        list($response, $data)  = getLastResults();
+        if($response=="success"){
+            foreach ($data as $key => $value) {
+                insertResults($value["id"],$value["results"],$value["Game"]);
+            }
+            echo "success";
+        }
+    } catch (Exception $e) {
+        echo 'Excepción capturada: ',  $e->getMessage(), "\n";
+        $data = "error";
+    }    
+} else {
+    // Fuera del rango de tiempo permitido
+    echo "El proceso no debe ejecutarse en este momento.";
+}
+
+//echo json_encode($games);
 ?>
