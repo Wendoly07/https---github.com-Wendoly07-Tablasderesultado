@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/c872f6d5-30ef-4908-8784-ffa7180e8b53/resourceGroups/rg-loto-cac-dev/providers/Microsoft.Web/sites/Tablasderesultados",
+    "appService.deploySubpath": "."
+}
