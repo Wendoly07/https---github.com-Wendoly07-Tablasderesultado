@@ -425,7 +425,7 @@ if ($status === 'done') {
     </table>
   </div>
 
-  <div class="foot">Loto Centroamérica &mdash; Panel interno &mdash; <?php echo date('Y'); ?></div>
+  <div class="foot">Loto Centroamérica &mdash; Panel resultados &mdash; <?php echo date('Y'); ?></div>
 
 </div>
 
