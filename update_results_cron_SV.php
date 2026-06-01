@@ -96,11 +96,11 @@ function insertDraw(
     if (intval($row['total']) > 0) return;
 
     $tsSeconds     = intval($timestampMs / 1000);
-    $drawDate      = gmdate('Y-m-d H:i:s', $tsSeconds);   // guardar en UTC
-    $dayOfWeek     = gmdate('l', $tsSeconds);
+    $drawDate      = date('Y-m-d H:i:s', $tsSeconds);
+    $dayOfWeek     = date('l', $tsSeconds);
     $drawTimeFinal = preg_match('/^\d{2}:\d{2}$/', $drawTime)
         ? $drawTime . ':00'
-        : gmdate('H:i:s', $tsSeconds);
+        : date('H:i:s', $tsSeconds);
 
     [$resultRaw, $pares] = parseResult($gameName, $rawResult);
     if ($resultRaw === '') return;

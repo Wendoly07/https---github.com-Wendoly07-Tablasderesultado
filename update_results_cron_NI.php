@@ -217,4 +217,3 @@ try {
     echo "ERROR: " . $e->getMessage() . "\n";
     http_response_code(500);
 }
-// ─── EJECUCION MANUAL POST ────────
