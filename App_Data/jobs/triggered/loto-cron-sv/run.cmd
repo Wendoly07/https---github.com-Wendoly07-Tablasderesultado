@@ -1,0 +1,1 @@
+php "%~dp0update_results_cron_SV.php"

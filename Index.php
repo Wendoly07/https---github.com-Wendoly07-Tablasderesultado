@@ -3,11 +3,18 @@ date_default_timezone_set('America/Managua');
 
 $output = '';
 $status = '';
-
+$pais   = '';
 // ─── EJECUCION MANUAL POST ────────
-if (isset($_POST['run']) && $_POST['run'] === 'HN') {
+if (isset($_POST['run'])) {
+    $pais = $_POST['run'];
     ob_start();
-    include __DIR__ . '/Update_results_cron_hn.php';
+    if ($pais === 'HN') {
+        include __DIR__ . '/Update_results_cron_hn.php';
+    } elseif ($pais === 'NI') {
+        include __DIR__ . '/update_results_cron_NI.php';
+    } elseif ($pais === 'SV') {
+        include __DIR__ . '/update_results_cron_sv.php';
+    }
     $output = ob_get_clean();
     $status = 'done';
 }
@@ -39,13 +46,12 @@ function colorize($text) {
     .header{background:#ef7d00;padding:0 2.5rem;height:76px;display:flex;align-items:center;justify-content:space-between}
     .header-left{display:flex;align-items:center;gap:14px}
     .logo-wrap{width:54px;height:54px;flex-shrink:0}
-    .logo-wrap svg{width:100%;height:100%}
+    .logo-wrap img{width:54px;height:54px;object-fit:contain}
     .header-info h1{font-size:20px;font-weight:800;color:#fff;letter-spacing:0.01em}
     .header-info p{font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px}
     .panel-tag{background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.45);color:#fff;font-size:13px;font-weight:600;padding:8px 20px;border-radius:22px}
 
     .content{max-width:760px;margin:2.5rem auto;padding:0 1.5rem}
-
     .section-label{font-size:12px;font-weight:700;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;margin-bottom:1rem}
 
     .countries{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:1.5rem}
@@ -62,9 +68,15 @@ function colorize($text) {
     .b-active{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
     .b-soon{background:#f8fafc;color:#94a3b8;border:1px solid #e2e8f0}
 
+    .btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:0}
     .run-btn{width:100%;padding:14px;border-radius:12px;border:none;background:#ef7d00;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.12s,transform 0.1s}
     .run-btn:hover{background:#d96a00}
     .run-btn:active{transform:scale(0.99)}
+    .run-btn.ni{background:#1d4ed8}
+    .run-btn.ni:hover{background:#1e40af}
+    .run-btn.sv{background:#16a34a}
+    .run-btn.sv:hover{background:#15803d}
+    .run-btn.ni:hover{background:#1e40af}
 
     .output-wrap{margin-top:16px;background:#111827;border-radius:12px;overflow:hidden}
     .output-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1f2937}
@@ -85,7 +97,7 @@ function colorize($text) {
 <div class="header">
   <div class="header-left">
     <div class="logo-wrap">
-      <img src="img/logo.svg" alt="Loto" style="width:54px;height:54px;object-fit:contain">
+      <img src="img/logo.svg" alt="Loto">
     </div>
     <div class="header-info">
       <h1>Loto Centroamérica</h1>
@@ -107,30 +119,51 @@ function colorize($text) {
       <span class="c-badge b-active">&#10003; Activo</span>
       <div style="margin-top:10px">
         <a href="https://tablasderesultados-gyf8dha0cxdyggb3.canadacentral-01.azurewebsites.net/Update_results_cron_hn.php"
-           target="_blank"
-           style="font-size:11px;color:#2563eb;word-break:break-all;text-decoration:none;line-height:1.5">
+           target="_blank" style="font-size:11px;color:#2563eb;word-break:break-all;text-decoration:none;line-height:1.5">
           &#128279; Update_results_cron_hn.php
         </a>
       </div>
     </div>
-    <div class="c-card disabled">
-      <div class="c-top"><span class="c-iso">NI</span><span class="dot"></span></div>
+    <div class="c-card active">
+      <div class="c-top"><span class="c-iso">NI</span><span class="dot on"></span></div>
       <div class="c-name">Nicaragua</div>
-      <div class="c-src">Próximamente</div>
-      <span class="c-badge b-soon">Próximamente</span>
+      <div class="c-src">gamesdata.loto.com.ni</div>
+      <span class="c-badge b-active">&#10003; Activo</span>
+      <div style="margin-top:10px">
+        <a href="https://tablasderesultados-gyf8dha0cxdyggb3.canadacentral-01.azurewebsites.net/update_results_cron_NI.php"
+           target="_blank" style="font-size:11px;color:#2563eb;word-break:break-all;text-decoration:none;line-height:1.5">
+          &#128279; update_results_cron_NI.php
+        </a>
+      </div>
     </div>
-    <div class="c-card disabled">
-      <div class="c-top"><span class="c-iso">SV</span><span class="dot"></span></div>
+    <div class="c-card active">
+      <div class="c-top"><span class="c-iso">SV</span><span class="dot on"></span></div>
       <div class="c-name">El Salvador</div>
-      <div class="c-src">Próximamente</div>
-      <span class="c-badge b-soon">Próximamente</span>
+      <div class="c-src">gamesdata.loto.sv</div>
+      <span class="c-badge b-active">&#10003; Activo</span>
+      <div style="margin-top:10px">
+        <a href="https://tablasderesultados-gyf8dha0cxdyggb3.canadacentral-01.azurewebsites.net/update_results_cron_SV.php"
+           target="_blank" style="font-size:11px;color:#2563eb;word-break:break-all;text-decoration:none;line-height:1.5">
+          &#128279; update_results_cron_sv.php
+        </a>
+      </div>
     </div>
   </div>
 
-  <form method="POST">
-    <input type="hidden" name="run" value="HN">
-    <button type="submit" class="run-btn">&#9654; Ejecutar actualización — Honduras</button>
-  </form>
+  <div class="btns">
+    <form method="POST">
+      <input type="hidden" name="run" value="HN">
+      <button type="submit" class="run-btn">&#9654; Actualizar Honduras</button>
+    </form>
+    <form method="POST">
+      <input type="hidden" name="run" value="NI">
+      <button type="submit" class="run-btn ni">&#9654; Actualizar Nicaragua</button>
+    </form>
+    <form method="POST">
+      <input type="hidden" name="run" value="SV">
+      <button type="submit" class="run-btn sv">&#9654; Actualizar El Salvador</button>
+    </form>
+  </div>
 
   <?php if ($status === 'done'): ?>
   <?php
@@ -139,10 +172,11 @@ function colorize($text) {
     if ($hasErr)     { $badgeClass = 's-err';  $badgeText = 'Error'; }
     elseif ($hasNew) { $badgeClass = 's-ok';   $badgeText = 'Nuevos insertados'; }
     else             { $badgeClass = 's-none';  $badgeText = 'Sin cambios'; }
+    $paisLabel = $pais === 'HN' ? 'Honduras' : ($pais === 'NI' ? 'Nicaragua' : 'El Salvador');
   ?>
   <div class="output-wrap">
     <div class="output-head">
-      <span class="output-label-tag">Output</span>
+      <span class="output-label-tag">Output — <?php echo $paisLabel; ?></span>
       <span class="status <?php echo $badgeClass; ?>"><?php echo $badgeText; ?></span>
     </div>
     <div class="output-body"><?php echo colorize($output); ?></div>
