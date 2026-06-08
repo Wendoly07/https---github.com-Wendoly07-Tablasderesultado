@@ -95,8 +95,8 @@ function insertDraw(
     $stmtChk = sqlsrv_query(
         $conn,
         "SELECT COUNT(*) AS total
-           FROM numeros_ganadores_sorteos_prod_prueba
-          WHERE pais = 'NI' AND game_name = ? AND draw_number = ?",
+           FROM numeros_ganadores_sorteos_prod
+          WHERE pais = 'Nicaragua' AND game_name = ? AND draw_number = ?",
         [$gameName, $drawNumber]
     );
     if ($stmtChk === false) {
@@ -121,14 +121,14 @@ function insertDraw(
         $parValues[] = isset($pares[$i]) ? trim(strval($pares[$i])) : null;
     }
 
-    $sql = "INSERT INTO numeros_ganadores_sorteos_prod_prueba
+    $sql = "INSERT INTO numeros_ganadores_sorteos_prod
                 (pais, game_name, draw_number, draw_date, result_raw,
                  jackpot, day_of_week, draw_time, source_section,
                  par1, par2, par3, par4, par5, par6, par7)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $params = array_merge(
-        ['NI', $gameName, $drawNumber, $drawDate, $resultRaw,
+        ['Nicaragua', $gameName, $drawNumber, $drawDate, $resultRaw,
          $jackpot, $dayOfWeek, $drawTimeFinal, 'gamesdata.loto.com.ni'],
         $parValues
     );

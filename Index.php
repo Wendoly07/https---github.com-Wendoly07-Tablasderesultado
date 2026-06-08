@@ -57,7 +57,7 @@ function getLastDraws() {
     }
 
     $sql = "SELECT TOP 30 pais, game_name, draw_number, draw_date, result_raw, draw_time
-            FROM numeros_ganadores_sorteos_prod_prueba
+            FROM numeros_ganadores_sorteos_prod
             ORDER BY draw_date DESC";
     $stmt = sqlsrv_query($conn, $sql);
     $rows = [];
@@ -372,10 +372,10 @@ if ($status === 'done') {
     <div class="table-head">
       <p class="section-title" style="margin:0">Últimos sorteos insertados</p>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <button onclick="filtrar('ALL')" class="filter-btn active" id="f-all">Todos</button>
-        <button onclick="filtrar('HN')"  class="filter-btn" id="f-hn">Honduras</button>
-        <button onclick="filtrar('NI')"  class="filter-btn" id="f-ni">Nicaragua</button>
-        <button onclick="filtrar('SV')"  class="filter-btn" id="f-sv">El Salvador</button>
+        <button onclick="filtrar('ALL')"         class="filter-btn active" id="f-all">Todos</button>
+        <button onclick="filtrar('Honduras')"   class="filter-btn" id="f-hn">Honduras</button>
+        <button onclick="filtrar('Nicaragua')"  class="filter-btn" id="f-ni">Nicaragua</button>
+        <button onclick="filtrar('El Salvador')" class="filter-btn" id="f-sv">El Salvador</button>
         <span style="font-size:12px;color:var(--muted)"><?php echo date('d/m/Y H:i:s'); ?></span>
       </div>
     </div>
@@ -425,14 +425,15 @@ if ($status === 'done') {
     </table>
   </div>
 
-  <div class="foot">Loto Centroamérica &mdash; Panel resultados &mdash; <?php echo date('Y'); ?></div>
+  <div class="foot">Loto Centroamérica &mdash; Panel interno &mdash; <?php echo date('Y'); ?></div>
 
 </div>
 
 <script>
 function filtrar(pais) {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('f-' + pais.toLowerCase()).classList.add('active');
+    const idMap = {'ALL':'all','Honduras':'hn','Nicaragua':'ni','El Salvador':'sv'};
+    document.getElementById('f-' + idMap[pais]).classList.add('active');
     document.querySelectorAll('tbody tr[data-pais]').forEach(row => {
         row.style.display = (pais === 'ALL' || row.dataset.pais === pais) ? '' : 'none';
     });
