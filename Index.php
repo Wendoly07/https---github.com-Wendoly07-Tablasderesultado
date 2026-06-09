@@ -21,16 +21,15 @@ if (isset($_POST['run'])) {
 
 function colorize($text) {
     $lines = explode("\n", htmlspecialchars($text));
-    $result = [];
+    $nuevos = [];
+    $errores = [];
     foreach ($lines as $line) {
-        if (str_starts_with($line, '[NUEVO]'))     $result[] = '<span class="ok">'  . $line . '</span>';
-        elseif (str_starts_with($line, '[SKIP]'))  $result[] = '<span class="skip">' . $line . '</span>';
-        elseif (str_starts_with($line, 'ERROR'))   $result[] = '<span class="err">'  . $line . '</span>';
-        elseif (str_starts_with($line, '==='))     $result[] = '<span class="head">' . $line . '</span>';
-        elseif (str_starts_with($line, '[JUEGO]')) $result[] = '<span class="game">' . $line . '</span>';
-        else $result[] = $line;
+        if (str_starts_with($line, '[NUEVO]'))  $nuevos[]  = '<span class="ok">' . $line . '</span>';
+        elseif (str_starts_with($line, 'ERROR')) $errores[] = '<span class="err">' . $line . '</span>';
     }
-    return implode("\n", $result);
+    if (!empty($errores)) return implode("\n", $errores);
+    if (!empty($nuevos))  return implode("\n", $nuevos);
+    return '<span class="skip">No hay nuevos resultados para insertar.</span>';
 }
 
 function getLastDraws() {
@@ -397,7 +396,10 @@ if ($status === 'done') {
         <?php foreach ($lastDraws as $row): ?>
         <?php
           $paisCod  = $row['pais'];
-          $tagClass = $paisCod === 'HN' ? 'tag-hn' : ($paisCod === 'NI' ? 'tag-ni' : 'tag-sv');
+          if ($paisCod === 'Honduras' || $paisCod === 'HN') $tagClass = 'tag-hn';
+          elseif ($paisCod === 'Nicaragua' || $paisCod === 'NI') $tagClass = 'tag-ni';
+          elseif ($paisCod === 'El Salvador' || $paisCod === 'SV') $tagClass = 'tag-sv';
+          else $tagClass = 'tag-hn';
           if ($row['draw_date'] instanceof DateTime) {
               $drawDate = $row['draw_date']->format('d/m/Y');
           } else {
@@ -435,7 +437,9 @@ function filtrar(pais) {
     const idMap = {'ALL':'all','Honduras':'hn','Nicaragua':'ni','El Salvador':'sv'};
     document.getElementById('f-' + idMap[pais]).classList.add('active');
     document.querySelectorAll('tbody tr[data-pais]').forEach(row => {
-        row.style.display = (pais === 'ALL' || row.dataset.pais === pais) ? '' : 'none';
+        const paisMap = {'Honduras': ['Honduras','HN'], 'Nicaragua': ['Nicaragua','NI'], 'El Salvador': ['El Salvador','SV']};
+        const match = pais === 'ALL' || (paisMap[pais] && paisMap[pais].includes(row.dataset.pais));
+        row.style.display = match ? '' : 'none';
     });
 }
 </script>

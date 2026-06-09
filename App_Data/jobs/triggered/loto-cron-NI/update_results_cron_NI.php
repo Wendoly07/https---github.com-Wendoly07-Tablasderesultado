@@ -1,6 +1,4 @@
 <?php
-header('Content-Type: text/plain; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
 
 date_default_timezone_set('America/Managua');
 
@@ -63,6 +61,12 @@ function parseResult(string $gameName, $rawResult): array {
     // Filtrar valores vacíos
     $filtered = array_filter($rawResult, fn($v) => $v !== '' && $v !== null);
     if (empty($filtered)) return ['', []];
+
+    // Más 1: array ["56","1"] → solo tomar el segundo elemento como par1
+    if ($gameName === 'Más 1') {
+        $val = trim(strval($rawResult[1] ?? $rawResult[0] ?? ''));
+        return [implode('-', array_values($rawResult)), [$val]];
+    }
 
     // Juga 3: string compacto ["053"] → 0, 5, 3
     if ($gameName === 'Juga 3') {

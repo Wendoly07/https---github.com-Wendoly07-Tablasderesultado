@@ -1,6 +1,4 @@
 <?php
-header('Content-Type: text/plain; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
 
 date_default_timezone_set('America/Managua');
 
@@ -72,10 +70,10 @@ function parseResult(string $gameName, $rawResult): array {
         $rawResult = [$rawResult];
     }
 
-    // ── Jugá Tres: ["596"] → 5, 9, 6
+    // ── Jugá Tres: ["417"] → par1 = 417 completo
     if ($gameName === 'Jugá Tres') {
-        $digits = str_split($rawResult[0] ?? '');
-        return [implode('-', $digits), $digits];
+        $val = $rawResult[0] ?? '';
+        return [$val, [$val]];
     }
 
     // ── Compactos de 6 dígitos en pares
