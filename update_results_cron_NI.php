@@ -165,6 +165,9 @@ function processBlock(array $draws, string $gameName, $conn): void {
                            ? floatval($drawData['jackpot']) : null;
 
             if ($drawNumber === '' || $rawResult === null || $timestampSec === 0) continue;
+            // No insertar result vacío o sorteo futuro
+            if (is_array($rawResult) && (empty($rawResult) || $rawResult[0] === null || $rawResult[0] === '')) continue;
+            if ($timestampSec > time() + 300) continue;
             insertDraw($conn, $gameName, $drawNumber, $timestampSec, $key, $rawResult, $jackpot);
 
         } else {
@@ -180,6 +183,9 @@ function processBlock(array $draws, string $gameName, $conn): void {
                                 ? floatval($timeDraw['jackpot']) : null;
 
                 if ($drawNumber === '' || $rawResult === null || $timestampSec === 0) continue;
+                // No insertar result vacío o sorteo futuro
+                if (is_array($rawResult) && (empty($rawResult) || $rawResult[0] === null || $rawResult[0] === '')) continue;
+                if ($timestampSec > time() + 300) continue;
                 insertDraw($conn, $gameName, $drawNumber, $timestampSec, $timeKey, $rawResult, $jackpot);
             }
         }

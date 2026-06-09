@@ -142,6 +142,16 @@ function processBlock(array $draws, string $gameName, $conn): void {
                            ? floatval($drawData['jackpot']) : null;
 
             if ($drawNumber === '' || $rawResult === null || $timestampMs === 0) continue;
+
+            // No insertar si result es null o vacío (Next Draw / sorteo futuro)
+            if (!is_array($rawResult) && $rawResult === null) continue;
+            if (is_array($rawResult) && (empty($rawResult) || $rawResult[0] === null || $rawResult[0] === '')) continue;
+
+            // No insertar sorteos futuros
+            $tsNow = time();
+            $tsSorteo = ($timestampMs > 9999999999) ? intval($timestampMs / 1000) : $timestampMs;
+            if ($tsSorteo > $tsNow + 300) continue; // más de 5 minutos en el futuro
+
             insertDraw($conn, $gameName, $drawNumber, $timestampMs, $key, $rawResult, $jackpot);
 
         } else {
