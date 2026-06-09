@@ -68,10 +68,10 @@ function parseResult(string $gameName, $rawResult): array {
         return [implode('-', array_values($rawResult)), [$val]];
     }
 
-    // Juga 3: string compacto ["053"] → 0, 5, 3
+    // Juga 3: ["491"] → par1 = 491 completo
     if ($gameName === 'Juga 3') {
-        $digits = str_split($rawResult[0] ?? '');
-        return [implode('-', $digits), $digits];
+        $val = $rawResult[0] ?? '';
+        return [$val, [$val]];
     }
 
     // Caso general: array normal
