@@ -57,13 +57,14 @@ function fetchGamesData(): array {
 // ─── Parsear result según tipo de juego ───────────────────────────────────
 function parseResult(string $gameName, $rawResult): array {
 
-    // ── Diaria +1: string "43 \"+1\":    5 "
+    // ── Diaria +1: string "43 \"+1\":    5 " → solo el número después de : en par1
     if ($gameName === 'Diaria +1') {
         preg_match('/^\s*(\d+)/', $rawResult, $m1);
         preg_match('/\"[^\"]+\"\s*:\s*(\d+)/', $rawResult, $m2);
-        $par1 = $m1[1] ?? '';
-        $par2 = $m2[1] ?? '';
-        return ["$par1-$par2", array_filter([$par1, $par2], fn($v) => $v !== '')];
+        $num1 = $m1[1] ?? '';
+        $num2 = $m2[1] ?? '';
+        $raw  = $num1 ? "$num1-$num2" : $num2;
+        return [$raw, [$num2]];
     }
 
     if (!is_array($rawResult)) {

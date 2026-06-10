@@ -63,7 +63,8 @@ function parseResult(string $gameName, $rawResult): array {
         preg_match('/\"[^\"]+\"\s*:\s*(\d+)/', $rawResult, $m2);
         $par1 = $m1[1] ?? '';
         $par2 = $m2[1] ?? '';
-        return ["$par1-$par2", array_filter([$par1, $par2], fn($v) => $v !== '')];
+        $result = trim("$par1-$par2", '-');
+        return [$result, $par2 !== '' ? [$par2] : []];
     }
 
     if (!is_array($rawResult)) {
