@@ -71,8 +71,11 @@ function insertDraw(
     int    $timestampMs,   // El Salvador usa milisegundos como Honduras
     string $drawTime,
     $rawResult,
-    ?float $jackpot
+    ?float $jackpot,
+    ?float $nextJackpot = null
 ): void {
+    // Rechazar si result es null (Next Draw sin resultado)
+    if ($rawResult === null) return;
     if (!is_array($rawResult)) $rawResult = [$rawResult];
     $hasData = array_filter($rawResult, fn($v) => $v !== '' && $v !== null);
     if (empty($hasData)) return;
@@ -110,13 +113,14 @@ function insertDraw(
     $sql = "INSERT INTO numeros_ganadores_sorteos_prod
                 (pais, game_name, draw_number, draw_date, result_raw,
                  jackpot, day_of_week, draw_time, source_section,
-                 par1, par2, par3, par4, par5, par6, par7)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                 par1, par2, par3, par4, par5, par6, par7, next_jackpot)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $params = array_merge(
         ['El Salvador', $gameName, $drawNumber, $drawDate, $resultRaw,
          $jackpot, $dayOfWeek, $drawTimeFinal, 'gamesdata.loto.sv'],
-        $parValues
+        $parValues,
+        [$nextJackpot]
     );
 
     $stmt = sqlsrv_query($conn, $sql, $params);
@@ -129,7 +133,7 @@ function insertDraw(
 }
 
 // ─── Procesar un bloque de sorteos ────────────────────────────────────────
-function processBlock(array $draws, string $gameName, $conn): void {
+function processBlock(array $draws, string $gameName, $conn, ?float $nextJackpot = null): void {
     foreach ($draws as $key => $drawData) {
         if (empty($drawData) || !is_array($drawData)) continue;
 
@@ -152,7 +156,7 @@ function processBlock(array $draws, string $gameName, $conn): void {
             $tsSorteo = ($timestampMs > 9999999999) ? intval($timestampMs / 1000) : $timestampMs;
             if ($tsSorteo > $tsNow + 300) continue; // más de 5 minutos en el futuro
 
-            insertDraw($conn, $gameName, $drawNumber, $timestampMs, $key, $rawResult, $jackpot);
+            insertDraw($conn, $gameName, $drawNumber, $timestampMs, $key, $rawResult, $jackpot, $nextJackpot);
 
         } else {
             // Estructura anidada (Last week): { "Monday": { "08:58": {...} } }
@@ -167,7 +171,7 @@ function processBlock(array $draws, string $gameName, $conn): void {
                                ? floatval($timeDraw['jackpot']) : null;
 
                 if ($drawNumber === '' || $rawResult === null || $timestampMs === 0) continue;
-                insertDraw($conn, $gameName, $drawNumber, $timestampMs, $timeKey, $rawResult, $jackpot);
+                insertDraw($conn, $gameName, $drawNumber, $timestampMs, $timeKey, $rawResult, $jackpot, $nextJackpot);
             }
         }
     }
@@ -188,11 +192,18 @@ function processAllGames(array $gamesData): void {
         }
         if (!$gameName) $gameName = $gameKey;
 
+        // Extraer jackpot del próximo sorteo (Loto Super Premio)
+        $nextJackpot = null;
+        if (isset($gameInfo['Next Draw']['draws']['jackpot'])) {
+            $nj = $gameInfo['Next Draw']['draws']['jackpot'];
+            if ($nj > 0) $nextJackpot = floatval($nj);
+        }
+
         echo "[JUEGO] $gameName\n";
         foreach ($sections as $sec) {
             $draws = $gameInfo[$sec]['draws'] ?? [];
             if (empty($draws) || !is_array($draws)) continue;
-            processBlock($draws, $gameName, $conn);
+            processBlock($draws, $gameName, $conn, $nextJackpot);
         }
     }
 
