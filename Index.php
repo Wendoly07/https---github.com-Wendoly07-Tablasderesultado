@@ -127,14 +127,16 @@ if ($status === 'done') {
       box-shadow: 0 2px 20px rgba(239,125,0,0.3);
     }
 
-    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .logo { flex: 0 0 auto; }
     .logo img { width: 60px; height: 60px; object-fit: contain; }
+    .header-copy { min-width: 0; }
     .header-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
     .header-sub { font-size: 16px; color: rgba(255,255,255,0.75); margin-top: 1px; }
-    .header-time { font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 500; background: rgba(0,0,0,0.12); padding: 6px 14px; border-radius: 20px; }
+    .header-time { flex: 0 0 auto; font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 500; background: rgba(0,0,0,0.12); padding: 6px 14px; border-radius: 20px; }
 
     .page { max-width: 100%; margin: 0; padding: 1.5rem 2.5rem; }
-    .grid-top { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+    .grid-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 0.7fr); gap: 1.5rem; margin-bottom: 1.5rem; }
 
     .section-title {
       font-size: 14px;
@@ -145,7 +147,7 @@ if ($status === 'done') {
       margin-bottom: 1rem;
     }
 
-    .countries { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .countries { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
 
     .c-card {
       background: var(--card);
@@ -273,12 +275,86 @@ if ($status === 'done') {
 
     .foot { margin-top: 1.5rem; text-align: center; font-size: 12px; color: var(--muted); }
 
-    @media (max-width: 768px) {
+    @media (max-width: 1180px) {
       .grid-top { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 920px) {
+      .countries { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .page { padding: 1.25rem; }
+    }
+
+    @media (max-width: 768px) {
+      .header {
+        height: auto;
+        min-height: 72px;
+        padding: 10px 1rem;
+        align-items: flex-start;
+        gap: 10px;
+        flex-direction: column;
+      }
+      .header-title { font-size: 17px; }
+      .header-sub { font-size: 13px; line-height: 1.25; }
+      .header-time { align-self: flex-start; font-size: 12px; padding: 5px 12px; }
+      .page { padding: 1rem; }
       .countries { grid-template-columns: 1fr; }
       .btns { grid-template-columns: 1fr; }
-      .header { padding: 0 1rem; }
-      .page { padding: 1rem; }
+      .table-head { align-items: flex-start; }
+      .filter-btn { padding: 7px 12px; }
+    }
+
+    @media (max-width: 640px) {
+      .logo img { width: 52px; height: 52px; }
+      .c-card,
+      .actions-card { padding: 1rem; border-radius: 12px; }
+      .section-title { font-size: 12px; }
+      .c-iso { font-size: 22px; }
+      .c-name { font-size: 16px; }
+      .output-body { max-height: 280px; }
+
+      table,
+      thead,
+      tbody,
+      tr,
+      th,
+      td { display: block; }
+
+      thead { display: none; }
+      tbody tr {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+      }
+      tbody tr:hover { background: transparent; }
+      tbody td {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        padding: 7px 0;
+        font-size: 13px;
+        word-break: break-word;
+      }
+      tbody td::before {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      tbody td:nth-child(1)::before { content: "País"; }
+      tbody td:nth-child(2)::before { content: "Juego"; }
+      tbody td:nth-child(3)::before { content: "Sorteo"; }
+      tbody td:nth-child(4)::before { content: "Fecha"; }
+      tbody td:nth-child(5)::before { content: "Hora"; }
+      tbody td:nth-child(6)::before { content: "Resultado"; }
+      .result-pill { display: inline-block; width: fit-content; max-width: 100%; }
+    }
+
+    @media (max-width: 420px) {
+      .header-left { gap: 10px; }
+      .page { padding: 0.75rem; }
+      .table-head { padding: 0.9rem; }
+      tbody td { grid-template-columns: 78px minmax(0, 1fr); }
     }
   </style>
 </head>
@@ -287,7 +363,7 @@ if ($status === 'done') {
 <div class="header">
   <div class="header-left">
     <div class="logo"><img src="img/logo.svg" alt="Loto"></div>
-    <div>
+    <div class="header-copy">
       <div class="header-title">Loto Centroamérica</div>
       <div class="header-sub">Panel de actualización de resultados</div>
     </div>
@@ -414,11 +490,11 @@ if ($status === 'done') {
           }
         ?>
         <tr data-pais="<?php echo htmlspecialchars($paisCod); ?>">
-          <td><span class="pais-tag <?php echo $tagClass; ?>"><?php echo htmlspecialchars($paisCod); ?></span></td>
-          <td><?php echo htmlspecialchars($row['game_name']); ?></td>
-          <td style="font-family:'DM Mono',monospace;font-size:12px">#<?php echo htmlspecialchars($row['draw_number']); ?></td>
-          <td style="font-size:12px;color:var(--muted)"><?php echo $drawDate; ?></td>
-          <td style="font-size:12px;color:var(--muted)"><?php echo $drawTime; ?></td>
+          <td data-label="País"><span class="pais-tag <?php echo $tagClass; ?>"><?php echo htmlspecialchars($paisCod); ?></span></td>
+          <td data-label="Juego"><?php echo htmlspecialchars($row['game_name']); ?></td>
+          <td data-label="Sorteo" style="font-family:'DM Mono',monospace;font-size:12px">#<?php echo htmlspecialchars($row['draw_number']); ?></td>
+          <td data-label="Fecha" style="font-size:12px;color:var(--muted)"><?php echo $drawDate; ?></td>
+          <td data-label="Hora" style="font-size:12px;color:var(--muted)"><?php echo $drawTime; ?></td>
           <td><span class="result-pill"><?php echo htmlspecialchars($row['result_raw'] ?? '—'); ?></span></td>
         </tr>
         <?php endforeach; ?>
