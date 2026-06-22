@@ -111,7 +111,7 @@ function insertDraw(
     // Deduplicación
     $stmtChk = sqlsrv_query(
         $conn,
-        "SELECT COUNT(*) AS total
+        "SELECT COUNT(*) AS total, MAX(next_jackpot) AS next_jackpot
            FROM numeros_ganadores_sorteos_prod
           WHERE pais = 'Honduras' AND game_name = ? AND draw_number = ?",
         [$gameName, $drawNumber]
@@ -123,6 +123,23 @@ function insertDraw(
     sqlsrv_free_stmt($stmtChk);
 
     if (intval($row['total']) > 0) {
+        if ($nextJackpot !== null && $row['next_jackpot'] === null) {
+            $stmtUpd = sqlsrv_query(
+                $conn,
+                "UPDATE numeros_ganadores_sorteos_prod
+                    SET next_jackpot = ?
+                  WHERE pais = 'Honduras'
+                    AND game_name = ?
+                    AND draw_number = ?
+                    AND next_jackpot IS NULL",
+                [$nextJackpot, $gameName, $drawNumber]
+            );
+            if ($stmtUpd === false) {
+                throw new Exception("Error UPDATE next_jackpot $gameName #$drawNumber: " . print_r(sqlsrv_errors(), true));
+            }
+            sqlsrv_free_stmt($stmtUpd);
+            echo "[ACTUALIZADO] $gameName #$drawNumber next_jackpot = $nextJackpot\n";
+        }
         return; // ya existe, silencioso
     }
 
@@ -166,7 +183,7 @@ function insertDraw(
 //   Today/Yesterday: { "08:58": {drawnumber,...}, "02:58": {...} }
 //   Last two draws:  { "Last Draw": {drawnumber,...}, "Penultimate": {...} }
 //   Last week:       { "Monday": { "08:58": {drawnumber,...} }, "Tuesday": {...} }
-function processBlock(array $draws, string $gameName, $conn, ?float $nextJackpot = null): void {
+function processBlock(array $draws, string $gameName, $conn, ?float $defaultNextJackpot = null, array $nextJackpotsByDraw = []): void {
     foreach ($draws as $key => $drawData) {
         if (empty($drawData) || !is_array($drawData)) continue;
 
@@ -176,6 +193,7 @@ function processBlock(array $draws, string $gameName, $conn, ?float $nextJackpot
             $timestampMs = intval($drawData['date'] ?? 0);
             $rawResult   = $drawData['result'] ?? null;
             $jackpot     = isset($drawData['jackpot']) ? floatval($drawData['jackpot']) : null;
+            $nextJackpot = $nextJackpotsByDraw[$drawNumber] ?? $defaultNextJackpot;
 
             if ($drawNumber === '' || $rawResult === null || $timestampMs === 0) continue;
             // No insertar si result es null o vacío (Next Draw / sorteo futuro)
@@ -195,6 +213,7 @@ function processBlock(array $draws, string $gameName, $conn, ?float $nextJackpot
                 $timestampMs = intval($timeDraw['date'] ?? 0);
                 $rawResult   = $timeDraw['result'] ?? null;
                 $jackpot     = isset($timeDraw['jackpot']) ? floatval($timeDraw['jackpot']) : null;
+                $nextJackpot = $nextJackpotsByDraw[$drawNumber] ?? $defaultNextJackpot;
 
                 if ($drawNumber === '' || $rawResult === null || $timestampMs === 0) continue;
                 // No insertar si result es null o vacío (Next Draw / sorteo futuro)
@@ -210,6 +229,47 @@ function processBlock(array $draws, string $gameName, $conn, ?float $nextJackpot
 }
 
 // ─── Procesar todos los juegos → Today + Yesterday + Last two draws ────────
+function collectDrawsWithJackpot($node, array &$drawsByNumber): void {
+    if (!is_array($node)) return;
+
+    if (isset($node['drawnumber']) && isset($node['date']) && isset($node['jackpot'])) {
+        $drawNumber = strval($node['drawnumber']);
+        $date = intval($node['date']);
+        $jackpot = floatval($node['jackpot']);
+
+        if ($drawNumber !== '' && $date > 0 && $jackpot > 0) {
+            $drawsByNumber[$drawNumber] = [
+                'drawnumber' => $drawNumber,
+                'date' => $date,
+                'jackpot' => $jackpot
+            ];
+        }
+    }
+
+    foreach ($node as $value) {
+        if (is_array($value)) {
+            collectDrawsWithJackpot($value, $drawsByNumber);
+        }
+    }
+}
+
+function buildNextJackpotsByDraw(array $gameInfo): array {
+    $drawsByNumber = [];
+    collectDrawsWithJackpot($gameInfo, $drawsByNumber);
+
+    $draws = array_values($drawsByNumber);
+    usort($draws, function ($a, $b) {
+        return $a['date'] <=> $b['date'];
+    });
+
+    $nextJackpotsByDraw = [];
+    for ($i = 0; $i < count($draws) - 1; $i++) {
+        $nextJackpotsByDraw[$draws[$i]['drawnumber']] = $draws[$i + 1]['jackpot'];
+    }
+
+    return $nextJackpotsByDraw;
+}
+
 function processAllGames(array $gamesData): void {
     $conn     = getSqlConnection();
     $sections = ['Today Draws', 'Yesterday Draws', 'Last week', 'Last two draws'];
@@ -228,15 +288,19 @@ function processAllGames(array $gamesData): void {
 
         // Para Super Premio, extraer el jackpot del próximo sorteo
         $nextJackpot = null;
+        $nextJackpotsByDraw = [];
         if (isset($gameInfo['Next Draw']['draws']['jackpot'])) {
             $nj = $gameInfo['Next Draw']['draws']['jackpot'];
             if ($nj > 0) $nextJackpot = floatval($nj);
+        }
+        if ($gameName === 'Super Premio') {
+            $nextJackpotsByDraw = buildNextJackpotsByDraw($gameInfo);
         }
 
         foreach ($sections as $sec) {
             $draws = $gameInfo[$sec]['draws'] ?? [];
             if (empty($draws) || !is_array($draws)) continue;
-            processBlock($draws, $gameName, $conn, $nextJackpot);
+            processBlock($draws, $gameName, $conn, $nextJackpot, $nextJackpotsByDraw);
         }
     }
 
