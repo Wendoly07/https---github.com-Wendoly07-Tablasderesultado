@@ -29,11 +29,11 @@ function getSqlConnection() {
     return $conn;
 }
 
-// ─── Fetch JSON desde gamesdata.loto.hn ───────────────────────────────────
+// ─── Fetch JSON desde gamesdata.loto.com.ni ───────────────────────────────
 function fetchGamesData(): array {
     $ch = curl_init();
     curl_setopt_array($ch, [
-        CURLOPT_URL            => 'https://gamesdata.loto.hn',
+        CURLOPT_URL            => 'https://gamesdata.loto.com.ni',
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
         CURLOPT_HTTPHEADER     => ['Content-Type: application/json']
@@ -45,53 +45,43 @@ function fetchGamesData(): array {
     if ($raw === false || $err) {
         throw new Exception("cURL error: $err");
     }
-
     $data = json_decode($raw, true);
     if (!is_array($data)) {
-        throw new Exception('JSON inválido recibido de gamesdata.loto.hn');
+        throw new Exception('JSON inválido recibido de gamesdata.loto.com.ni');
     }
-
     return $data;
 }
 
 // ─── Parsear result según tipo de juego ───────────────────────────────────
 function parseResult(string $gameName, $rawResult): array {
-
-    // ── Diaria +1: string "43 \"+1\":    5 "
-    if ($gameName === 'Diaria +1') {
-        preg_match('/^\s*(\d+)/', $rawResult, $m1);
-        preg_match('/\"[^\"]+\"\s*:\s*(\d+)/', $rawResult, $m2);
-        $par1 = $m1[1] ?? '';
-        $par2 = $m2[1] ?? '';
-        $result = trim("$par1-$par2", '-');
-        return [$result, $par2 !== '' ? [$par2] : []];
-    }
-
     if (!is_array($rawResult)) {
         $rawResult = [$rawResult];
     }
 
-    // ── Jugá Tres: ["417"] → par1 = 417 completo
-    if ($gameName === 'Jugá Tres') {
+    // Filtrar valores vacíos
+    $filtered = array_filter($rawResult, fn($v) => $v !== '' && $v !== null);
+    if (empty($filtered)) return ['', []];
+
+    // Más 1: array ["56","1"] → solo tomar el segundo elemento como par1
+    if ($gameName === 'Más 1') {
+        $val = trim(strval($rawResult[1] ?? $rawResult[0] ?? ''));
+        return [implode('-', array_values($rawResult)), [$val]];
+    }
+
+    // Juga 3: ["491"] → par1 = 491 completo
+    if ($gameName === 'Juga 3') {
         $val = $rawResult[0] ?? '';
         return [$val, [$val]];
     }
 
-    // ── Compactos de 6 dígitos en pares
-    $compactPairGames = ['TE HACE FALTA VIAJE', 'Dobleteá tu Suerte', 'Ribete'];
-    if (in_array($gameName, $compactPairGames)) {
-        $str   = $rawResult[0] ?? '';
-        $pares = str_split($str, 2);
+    // Juga 4: ["4000"] -> par1=4, par2=0, par3=0, par4=0
+    if ($gameName === 'Juga 4') {
+        $val = trim(strval($rawResult[0] ?? ''));
+        $pares = preg_match('/^\d{4}$/', $val) ? str_split($val) : array_values($rawResult);
         return [implode('-', $pares), $pares];
     }
 
-    // ── Resultado masivo → solo result_raw
-    $rawOnlyGames = ['NAVIDAD PA GANAR', 'Tu Carro Soñado'];
-    if (in_array($gameName, $rawOnlyGames)) {
-        return [implode('-', $rawResult), []];
-    }
-
-    // ── Caso general
+    // Caso general: array normal
     $pares = array_values($rawResult);
     return [implode('-', $pares), $pares];
 }
@@ -101,18 +91,23 @@ function insertDraw(
     $conn,
     string $gameName,
     string $drawNumber,
-    int    $timestampMs,
+    int    $timestampSec,  // Nicaragua usa segundos, no milisegundos
     string $drawTime,
     $rawResult,
     ?float $jackpot
 ): void {
+
+    // Validar que haya resultado real
+    if (!is_array($rawResult)) $rawResult = [$rawResult];
+    $hasData = array_filter($rawResult, fn($v) => $v !== '' && $v !== null);
+    if (empty($hasData)) return;
 
     // Deduplicación
     $stmtChk = sqlsrv_query(
         $conn,
         "SELECT COUNT(*) AS total
            FROM numeros_ganadores_sorteos_prod
-          WHERE pais = 'Honduras' AND game_name = ? AND draw_number = ?",
+          WHERE pais = 'Nicaragua' AND game_name = ? AND draw_number = ?",
         [$gameName, $drawNumber]
     );
     if ($stmtChk === false) {
@@ -121,17 +116,16 @@ function insertDraw(
     $row = sqlsrv_fetch_array($stmtChk, SQLSRV_FETCH_ASSOC);
     sqlsrv_free_stmt($stmtChk);
 
-    if (intval($row['total']) > 0) {
-        return; // ya existe, silencioso
-    }
+    if (intval($row['total']) > 0) return; // ya existe
 
-    $tsSeconds     = intval($timestampMs / 1000);
-    $drawDate      = date('Y-m-d H:i:s', $tsSeconds);
-    $dayOfWeek     = date('l', $tsSeconds);
-    // Usar siempre el timestamp para draw_time (las claves del JSON no son confiables)
-    $drawTimeFinal = date('H:i:s', $tsSeconds);
+    $drawDate      = date('Y-m-d H:i:s', $timestampSec);
+    $dayOfWeek     = date('l', $timestampSec);
+    $drawTimeFinal = preg_match('/^\d{2}:\d{2}$/', $drawTime)
+        ? $drawTime . ':00'
+        : date('H:i:s', $timestampSec);
 
     [$resultRaw, $pares] = parseResult($gameName, $rawResult);
+    if ($resultRaw === '') return;
 
     $parValues = [];
     for ($i = 0; $i < 7; $i++) {
@@ -145,8 +139,8 @@ function insertDraw(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $params = array_merge(
-        ['Honduras', $gameName, $drawNumber, $drawDate, $resultRaw,
-         $jackpot, $dayOfWeek, $drawTimeFinal, 'gamesdata.loto.hn'],
+        ['Nicaragua', $gameName, $drawNumber, $drawDate, $resultRaw,
+         $jackpot, $dayOfWeek, $drawTimeFinal, 'gamesdata.loto.com.ni'],
         $parValues
     );
 
@@ -159,55 +153,53 @@ function insertDraw(
     echo "[NUEVO] $gameName #$drawNumber ($dayOfWeek $drawTimeFinal) → $resultRaw\n";
 }
 
-// ─── Procesar sorteos de un bloque ────────────────────────────────────────
-// Soporta 3 estructuras:
-//   Today/Yesterday: { "08:58": {drawnumber,...}, "02:58": {...} }
+// ─── Procesar un bloque de sorteos ────────────────────────────────────────
+// Soporta:
+//   Today/Yesterday: { "11:58": {drawnumber,...}, "14:58": {...} }
 //   Last two draws:  { "Last Draw": {drawnumber,...}, "Penultimate": {...} }
-//   Last week:       { "Monday": { "08:58": {drawnumber,...} }, "Tuesday": {...} }
+//   Last week:       { "Monday": { "11:58": {drawnumber,...} }, ... }
+//   Whole week NI:   igual que Last week pero con datos vacíos (se filtran)
 function processBlock(array $draws, string $gameName, $conn): void {
     foreach ($draws as $key => $drawData) {
         if (empty($drawData) || !is_array($drawData)) continue;
 
-        // Caso directo: el valor tiene drawnumber (Today/Yesterday/Last two draws)
-        if (isset($drawData['drawnumber'])) {
+        if (isset($drawData['drawnumber']) && $drawData['drawnumber'] !== '') {
+            // Estructura plana (Today/Yesterday/Last two draws)
             $drawNumber  = strval($drawData['drawnumber']);
-            $timestampMs = intval($drawData['date'] ?? 0);
+            $timestampSec = intval($drawData['date'] ?? 0);
             $rawResult   = $drawData['result'] ?? null;
-            $jackpot     = isset($drawData['jackpot']) ? floatval($drawData['jackpot']) : null;
+            $jackpot     = isset($drawData['jackpot']) && $drawData['jackpot'] > 0
+                           ? floatval($drawData['jackpot']) : null;
 
-            if ($drawNumber === '' || $rawResult === null || $timestampMs === 0) continue;
-            // No insertar si result es null o vacío (Next Draw / sorteo futuro)
+            if ($drawNumber === '' || $rawResult === null || $timestampSec === 0) continue;
+            // No insertar result vacío o sorteo futuro
             if (is_array($rawResult) && (empty($rawResult) || $rawResult[0] === null || $rawResult[0] === '')) continue;
-
-            // No insertar sorteos futuros
-            $tsSorteo = ($timestampMs > 9999999999) ? intval($timestampMs / 1000) : $timestampMs;
-            if ($tsSorteo > time() + 300) continue;
-            insertDraw($conn, $gameName, $drawNumber, $timestampMs, $key, $rawResult, $jackpot);
+            if ($timestampSec > time() + 300) continue;
+            insertDraw($conn, $gameName, $drawNumber, $timestampSec, $key, $rawResult, $jackpot);
 
         } else {
-            // Caso Last week: el valor es un sub-array de timeslots { "08:58": {drawnumber,...} }
+            // Estructura anidada (Last week): { "Monday": { "11:58": {...} } }
             foreach ($drawData as $timeKey => $timeDraw) {
-                if (empty($timeDraw) || !is_array($timeDraw) || !isset($timeDraw['drawnumber'])) continue;
+                if (empty($timeDraw) || !is_array($timeDraw)) continue;
+                if (!isset($timeDraw['drawnumber']) || $timeDraw['drawnumber'] === '') continue;
 
-                $drawNumber  = strval($timeDraw['drawnumber']);
-                $timestampMs = intval($timeDraw['date'] ?? 0);
-                $rawResult   = $timeDraw['result'] ?? null;
-                $jackpot     = isset($timeDraw['jackpot']) ? floatval($timeDraw['jackpot']) : null;
+                $drawNumber   = strval($timeDraw['drawnumber']);
+                $timestampSec = intval($timeDraw['date'] ?? 0);
+                $rawResult    = $timeDraw['result'] ?? null;
+                $jackpot      = isset($timeDraw['jackpot']) && $timeDraw['jackpot'] > 0
+                                ? floatval($timeDraw['jackpot']) : null;
 
-                if ($drawNumber === '' || $rawResult === null || $timestampMs === 0) continue;
-                // No insertar si result es null o vacío (Next Draw / sorteo futuro)
+                if ($drawNumber === '' || $rawResult === null || $timestampSec === 0) continue;
+                // No insertar result vacío o sorteo futuro
                 if (is_array($rawResult) && (empty($rawResult) || $rawResult[0] === null || $rawResult[0] === '')) continue;
-
-                // No insertar sorteos futuros
-                $tsSorteo = ($timestampMs > 9999999999) ? intval($timestampMs / 1000) : $timestampMs;
-                if ($tsSorteo > time() + 300) continue;
-                insertDraw($conn, $gameName, $drawNumber, $timestampMs, $timeKey, $rawResult, $jackpot);
+                if ($timestampSec > time() + 300) continue;
+                insertDraw($conn, $gameName, $drawNumber, $timestampSec, $timeKey, $rawResult, $jackpot);
             }
         }
     }
 }
 
-// ─── Procesar todos los juegos → Today + Yesterday + Last two draws ────────
+// ─── Procesar todos los juegos ────────────────────────────────────────────
 function processAllGames(array $gamesData): void {
     $conn     = getSqlConnection();
     $sections = ['Today Draws', 'Yesterday Draws', 'Last week', 'Last two draws'];
@@ -215,7 +207,10 @@ function processAllGames(array $gamesData): void {
     foreach ($gamesData as $gameKey => $gameInfo) {
         $gameName = null;
         foreach ($sections as $sec) {
-            if (isset($gameInfo[$sec]['gamename'])) { $gameName = $gameInfo[$sec]['gamename']; break; }
+            if (isset($gameInfo[$sec]['gamename'])) {
+                $gameName = $gameInfo[$sec]['gamename'];
+                break;
+            }
         }
         if (!$gameName) $gameName = $gameKey;
 
@@ -229,11 +224,9 @@ function processAllGames(array $gamesData): void {
     sqlsrv_close($conn);
 }
 
-
 // ─── Ejecución principal ───────────────────────────────────────────────────
-// Solo corre entre 11:00 y 23:00 hora Managua
 try {
-    echo "=== Revisión " . date('Y-m-d H:i:s') . " ===\n";
+    echo "=== Revisión NI " . date('Y-m-d H:i:s') . " ===\n";
     $gamesData = fetchGamesData();
     processAllGames($gamesData);
     echo "=== Fin ===\n";

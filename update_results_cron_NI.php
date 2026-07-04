@@ -74,6 +74,13 @@ function parseResult(string $gameName, $rawResult): array {
         return [$val, [$val]];
     }
 
+    // Juga 4: ["4000"] -> par1=4, par2=0, par3=0, par4=0
+    if ($gameName === 'Juga 4') {
+        $val = trim(strval($rawResult[0] ?? ''));
+        $pares = preg_match('/^\d{4}$/', $val) ? str_split($val) : array_values($rawResult);
+        return [implode('-', $pares), $pares];
+    }
+
     // Caso general: array normal
     $pares = array_values($rawResult);
     return [implode('-', $pares), $pares];
