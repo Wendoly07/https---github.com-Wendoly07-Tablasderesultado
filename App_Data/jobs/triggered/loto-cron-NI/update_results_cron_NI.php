@@ -57,25 +57,26 @@ function parseResult(string $gameName, $rawResult): array {
     if (!is_array($rawResult)) {
         $rawResult = [$rawResult];
     }
+    $gameKey = strtolower(trim(strtr($gameName, ['á' => 'a', 'Á' => 'a'])));
 
     // Filtrar valores vacíos
     $filtered = array_filter($rawResult, fn($v) => $v !== '' && $v !== null);
     if (empty($filtered)) return ['', []];
 
     // Más 1: array ["56","1"] → solo tomar el segundo elemento como par1
-    if ($gameName === 'Más 1') {
+    if ($gameKey === 'mas 1') {
         $val = trim(strval($rawResult[1] ?? $rawResult[0] ?? ''));
         return [implode('-', array_values($rawResult)), [$val]];
     }
 
     // Juga 3: ["491"] → par1 = 491 completo
-    if ($gameName === 'Juga 3') {
+    if ($gameKey === 'juga 3') {
         $val = $rawResult[0] ?? '';
         return [$val, [$val]];
     }
 
     // Juga 4: ["4000"] -> par1=4, par2=0, par3=0, par4=0
-    if ($gameName === 'Juga 4') {
+    if ($gameKey === 'juga 4') {
         $val = trim(strval($rawResult[0] ?? ''));
         $pares = preg_match('/^\d{4}$/', $val) ? str_split($val) : array_values($rawResult);
         return [implode('-', $pares), $pares];
