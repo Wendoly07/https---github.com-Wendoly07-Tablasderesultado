@@ -80,7 +80,7 @@ function insertDraw(
     $hasData = array_filter($rawResult, fn($v) => $v !== '' && $v !== null);
     if (empty($hasData)) return;
 
-    // Deduplicación
+
     $stmtChk = sqlsrv_query(
         $conn,
         "SELECT COUNT(*) AS total
